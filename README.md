@@ -1,7 +1,10 @@
-# 図面寸法チェッカー
+# PDF図面 寸法チェッカー
 
-## GitHubへのアップロード
-ZIPを展開し、`index.html` と `README.md` をリポジトリの一番上にアップロードしてください。
+GitHubにはZIPではなく、このフォルダ内のファイルを直接アップロードしてください。
 
-## Vercel
-GitHubのリポジトリをImportし、そのままDeployしてください。
+必要ファイル:
+- index.html
+- manifest.webmanifest
+- sw.js
+- icon-192.png
+- icon-512.png

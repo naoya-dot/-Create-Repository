@@ -1,66 +1,76 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#111827" />
-  <title>図面寸法チェッカー</title>
-  <style>
-    *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}
-    header{background:#111827;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:3} h1{font-size:18px;margin:0}
-    .panel{padding:12px;background:#fff;border-bottom:1px solid #ddd}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-    button,.filelabel,input{font-size:16px;border-radius:10px;border:1px solid #cbd5e1;padding:10px 12px;background:white}
-    button.primary,.filelabel{background:#2563eb;color:#fff;border-color:#2563eb}.filelabel input{display:none}
-    button.active{background:#16a34a;color:white;border-color:#16a34a}.small{font-size:13px;color:#475569;line-height:1.5}
-    #wrap{position:relative;height:62vh;min-height:420px;background:#d1d5db;overflow:hidden;touch-action:none}
-    canvas{position:absolute;left:0;top:0;background:#fff;transform-origin:0 0}
-    #status{font-weight:700;margin-top:8px}.result{font-size:28px;font-weight:800;color:#dc2626}
-    footer{padding:12px 16px;font-size:12px;color:#64748b}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<title>PDF図面 寸法チェッカー</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;background:#f3f4f6}
+*{box-sizing:border-box}body{margin:0}.app{min-height:100vh;display:flex;flex-direction:column}
+header{background:#111827;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10}
+h1{font-size:18px;margin:0 0 4px}.sub{font-size:12px;opacity:.8}
+.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;background:#fff;border-bottom:1px solid #ddd}
+button,.file-label,input,select{font:inherit}button,.file-label{border:0;border-radius:10px;padding:11px 12px;background:#e5e7eb;text-align:center;font-weight:700}
+button.primary,.file-label.primary{background:#2563eb;color:#fff}button:disabled{opacity:.45}
+input[type=file]{display:none}.status{padding:9px 12px;background:#fff;font-size:13px;border-bottom:1px solid #ddd}
+.controls{display:flex;gap:8px;padding:8px 10px;background:#fff;align-items:center;overflow:auto;border-bottom:1px solid #ddd}
+.controls button{white-space:nowrap;padding:8px 10px}.page-info{white-space:nowrap;font-size:13px}
+.viewer-wrap{position:relative;flex:1;overflow:auto;background:#6b7280;touch-action:pan-x pan-y}
+.stage{position:relative;margin:18px auto;width:max-content;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+canvas{display:block;background:#fff}.overlay{position:absolute;inset:0;touch-action:none}
+.point{position:absolute;width:18px;height:18px;border:3px solid #fff;background:#ef4444;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px #ef4444}
+.measure-line{position:absolute;height:3px;background:#ef4444;transform-origin:0 50%;pointer-events:none}
+.measure-label{position:absolute;transform:translate(-50%,-130%);background:#111827;color:#fff;padding:5px 8px;border-radius:7px;font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none}
+.dialog{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:30}.dialog.show{display:flex}
+.card{background:#fff;border-radius:14px;padding:18px;width:min(420px,100%)}.card h2{font-size:18px;margin:0 0 10px}.card p{font-size:14px;line-height:1.5}.card input{width:100%;padding:12px;border:1px solid #bbb;border-radius:9px;font-size:18px}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}
+.help{padding:12px 14px;background:#fffbeb;color:#78350f;font-size:13px;line-height:1.5}
+</style>
 </head>
 <body>
-<header><h1>図面寸法チェッカー</h1></header>
-<section class="panel">
-  <label class="filelabel">① 図面を選ぶ<input id="file" type="file" accept="image/*"></label>
-  <div class="row">
-    <button id="calibrate">② 基準寸法を設定</button>
-    <button id="measure">③ 寸法を測る</button>
-    <button id="reset">やり直す</button>
-  </div>
-  <div id="status" class="small">まず、VectorworksからPNGまたはJPGで書き出した図面を選んでください。</div>
-  <div id="result" class="result"></div>
-</section>
-<div id="wrap"><canvas id="canvas"></canvas></div>
-<section class="panel small">
-  <b>使い方</b><br>
-  1. 図面を選ぶ<br>
-  2. 「基準寸法を設定」を押し、寸法が分かっている場所を2回タップ<br>
-  3. 実際の長さをmmで入力<br>
-  4. 「寸法を測る」を押し、測りたい場所を2回タップ<br><br>
-  2本指で拡大・縮小、1本指で図面を移動できます。
-</section>
-<footer>測定値は補助用です。施工前には必ず元図面・設計者・現地実測で確認してください。</footer>
-<script>
-const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),wrap=document.getElementById('wrap');
-const file=document.getElementById('file'),statusEl=document.getElementById('status'),resultEl=document.getElementById('result');
-const btnCal=document.getElementById('calibrate'),btnMeasure=document.getElementById('measure'),btnReset=document.getElementById('reset');
-let img=null, mode='pan', points=[], mmPerPx=null, scale=1, ox=0, oy=0, dragging=false, last={x:0,y:0}, pinchStart=null;
-function setMode(m){mode=m;points=[];btnCal.classList.toggle('active',m==='cal');btnMeasure.classList.toggle('active',m==='measure');resultEl.textContent='';
- statusEl.textContent=m==='cal'?'基準にする場所の始点と終点をタップしてください。':m==='measure'?(mmPerPx?'測りたい場所の始点と終点をタップしてください。':'先に基準寸法を設定してください。'):'図面を移動できます。';draw();}
-function fit(){if(!img)return; const s=Math.min(wrap.clientWidth/img.width,wrap.clientHeight/img.height);scale=s;ox=(wrap.clientWidth-img.width*s)/2;oy=(wrap.clientHeight-img.height*s)/2;draw();}
-function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);if(!img)return;ctx.setTransform(scale,0,0,scale,ox,oy);ctx.drawImage(img,0,0);ctx.lineWidth=3/scale;ctx.strokeStyle='#ef4444';ctx.fillStyle='#ef4444';
- points.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,7/scale,0,Math.PI*2);ctx.fill()}); if(points.length===2){ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);ctx.lineTo(points[1].x,points[1].y);ctx.stroke();}}
-function screenToImage(x,y){return{x:(x-ox)/scale,y:(y-oy)/scale}}
-file.onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{img=im;canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;mmPerPx=null;points=[];fit();statusEl.textContent='図面を読み込みました。次に「基準寸法を設定」を押してください。'};im.src=URL.createObjectURL(f)};
-btnCal.onclick=()=>img?setMode('cal'):alert('先に図面を選んでください。');btnMeasure.onclick=()=>{if(!img)return alert('先に図面を選んでください。');if(!mmPerPx)return alert('先に基準寸法を設定してください。');setMode('measure')};btnReset.onclick=()=>{points=[];mmPerPx=null;resultEl.textContent='';fit();setMode('pan')};
-function choosePoint(clientX,clientY){if(mode!=='cal'&&mode!=='measure')return;const r=wrap.getBoundingClientRect(),p=screenToImage(clientX-r.left,clientY-r.top);points.push(p);if(points.length>2)points=[p];draw();if(points.length===2){const px=Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y);if(mode==='cal'){const mm=parseFloat(prompt('この2点の実際の長さをmmで入力してください。例：3640'));if(mm>0){mmPerPx=mm/px;statusEl.textContent='基準寸法を設定しました。次に「寸法を測る」を押してください。';resultEl.textContent='設定完了';}else{points=[];draw();}}else{const mm=px*mmPerPx;resultEl.textContent=Math.round(mm).toLocaleString()+' mm';statusEl.textContent='もう一度測る場合は、次の始点をタップしてください。';}}}
-wrap.addEventListener('pointerdown',e=>{wrap.setPointerCapture(e.pointerId); if(mode==='cal'||mode==='measure'){choosePoint(e.clientX,e.clientY);return;}dragging=true;last={x:e.clientX,y:e.clientY}});
-wrap.addEventListener('pointermove',e=>{if(!dragging||mode!=='pan')return;ox+=e.clientX-last.x;oy+=e.clientY-last.y;last={x:e.clientX,y:e.clientY};draw()});
-wrap.addEventListener('pointerup',()=>dragging=false);
-wrap.addEventListener('wheel',e=>{e.preventDefault();if(!img)return;const r=wrap.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,before=screenToImage(mx,my),factor=e.deltaY<0?1.1:0.9;scale=Math.max(.1,Math.min(10,scale*factor));ox=mx-before.x*scale;oy=my-before.y*scale;draw()},{passive:false});
-let touches=[];wrap.addEventListener('touchstart',e=>{if(e.touches.length===2){const a=e.touches[0],b=e.touches[1];pinchStart={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),s:scale};}}, {passive:true});
-wrap.addEventListener('touchmove',e=>{if(e.touches.length===2&&pinchStart){const a=e.touches[0],b=e.touches[1],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);scale=Math.max(.1,Math.min(10,pinchStart.s*d/pinchStart.d));draw();}}, {passive:true});
-window.addEventListener('resize',()=>{canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;draw()});
-canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;
+<div class="app">
+<header><h1>PDF図面 寸法チェッカー</h1><div class="sub">PDF上の2点を押して寸法を測ります</div></header>
+<div class="toolbar">
+<label class="file-label primary">PDFを選ぶ<input id="fileInput" type="file" accept="application/pdf"></label>
+<button id="calibrateBtn" disabled>① 基準寸法を設定</button>
+<button id="measureBtn" disabled>② 寸法を測る</button>
+<button id="clearBtn" disabled>線を消す</button>
+</div>
+<div id="status" class="status">最初にPDFを選んでください。</div>
+<div class="controls">
+<button id="prevBtn" disabled>前のページ</button><span id="pageInfo" class="page-info">0 / 0</span><button id="nextBtn" disabled>次のページ</button>
+<button id="zoomOutBtn" disabled>－</button><span id="zoomInfo" class="page-info">100%</span><button id="zoomInBtn" disabled>＋</button>
+</div>
+<div class="help">使い方：PDFを開く →「基準寸法を設定」→ 寸法が分かる場所を2点押す → 実寸を入力 →「寸法を測る」→ 測りたい場所を2点押す。</div>
+<div class="viewer-wrap"><div id="stage" class="stage"><canvas id="pdfCanvas"></canvas><div id="overlay" class="overlay"></div></div></div>
+</div>
+<div id="dialog" class="dialog"><div class="card"><h2>基準になる実寸を入力</h2><p>いま選んだ2点の本当の長さを、mmで入力してください。</p><input id="realLength" type="number" inputmode="decimal" placeholder="例：3640"><div class="actions"><button id="cancelDialog">やめる</button><button id="saveScale" class="primary">決定</button></div></div></div>
+<script type="module">
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs';
+const $=id=>document.getElementById(id);
+const fileInput=$('fileInput'), canvas=$('pdfCanvas'), overlay=$('overlay'), stage=$('stage'), statusEl=$('status');
+let pdfDoc=null,pageNum=1,zoom=1.35,mode='idle',points=[],mmPerPdfPoint=null,currentViewport=null,measurements=[];
+function setStatus(t){statusEl.textContent=t}
+function enable(on){['calibrateBtn','measureBtn','clearBtn','prevBtn','nextBtn','zoomOutBtn','zoomInBtn'].forEach(id=>$(id).disabled=!on)}
+async function renderPage(){if(!pdfDoc)return;const page=await pdfDoc.getPage(pageNum);const viewport=page.getViewport({scale:zoom});currentViewport=viewport;const dpr=window.devicePixelRatio||1;canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';stage.style.width=viewport.width+'px';stage.style.height=viewport.height+'px';overlay.style.width=viewport.width+'px';overlay.style.height=viewport.height+'px';const ctx=canvas.getContext('2d');await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;$('pageInfo').textContent=`${pageNum} / ${pdfDoc.numPages}`;$('zoomInfo').textContent=Math.round(zoom/1.35*100)+'%';points=[];measurements=[];drawOverlay();}
+fileInput.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{setStatus('PDFを読み込んでいます…');const data=new Uint8Array(await f.arrayBuffer());pdfDoc=await pdfjsLib.getDocument({data}).promise;pageNum=1;mmPerPdfPoint=null;enable(true);await renderPage();setStatus('PDFを開きました。次に「基準寸法を設定」を押してください。')}catch(err){console.error(err);setStatus('PDFを開けませんでした。別のPDFで試してください。')}});
+function startMode(m){mode=m;points=[];drawOverlay();setStatus(m==='calibrate'?'寸法が分かっている場所の両端を、順番に2点押してください。':'測りたい場所の両端を、順番に2点押してください。')}
+$('calibrateBtn').onclick=()=>startMode('calibrate');
+$('measureBtn').onclick=()=>{if(!mmPerPdfPoint){setStatus('先に基準寸法を設定してください。');return}startMode('measure')};
+$('clearBtn').onclick=()=>{points=[];measurements=[];drawOverlay();setStatus('表示した寸法線を消しました。')};
+$('prevBtn').onclick=async()=>{if(pageNum>1){pageNum--;await renderPage()}};$('nextBtn').onclick=async()=>{if(pageNum<pdfDoc.numPages){pageNum++;await renderPage()}};
+$('zoomInBtn').onclick=async()=>{zoom=Math.min(3,zoom+0.2);await renderPage()};$('zoomOutBtn').onclick=async()=>{zoom=Math.max(.6,zoom-.2);await renderPage()};
+overlay.addEventListener('pointerdown',e=>{if(mode==='idle')return;e.preventDefault();const r=overlay.getBoundingClientRect();points.push({x:e.clientX-r.left,y:e.clientY-r.top});drawOverlay();if(points.length===2){if(mode==='calibrate')$('dialog').classList.add('show');else finishMeasure();}});
+function pixelDistance(a,b){return Math.hypot(b.x-a.x,b.y-a.y)}
+function finishMeasure(){const px=pixelDistance(points[0],points[1]);const pdfPoints=px/zoom;const mm=pdfPoints*mmPerPdfPoint;measurements.push({a:points[0],b:points[1],label:`${Math.round(mm).toLocaleString()} mm`});points=[];mode='idle';drawOverlay();setStatus(`測定結果：${Math.round(mm).toLocaleString()} mm`)}
+$('cancelDialog').onclick=()=>{$('dialog').classList.remove('show');points=[];mode='idle';drawOverlay()};
+$('saveScale').onclick=()=>{const real=parseFloat($('realLength').value);if(!(real>0)){alert('0より大きい数字を入力してください');return}const px=pixelDistance(points[0],points[1]);mmPerPdfPoint=real/(px/zoom);$('dialog').classList.remove('show');$('realLength').value='';points=[];mode='idle';drawOverlay();setStatus('基準寸法を設定しました。「寸法を測る」を押してください。')};
+function addPoint(p){const d=document.createElement('div');d.className='point';d.style.left=p.x+'px';d.style.top=p.y+'px';overlay.appendChild(d)}
+function addMeasure(m){addPoint(m.a);addPoint(m.b);const dx=m.b.x-m.a.x,dy=m.b.y-m.a.y,len=Math.hypot(dx,dy);const line=document.createElement('div');line.className='measure-line';line.style.left=m.a.x+'px';line.style.top=m.a.y+'px';line.style.width=len+'px';line.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;overlay.appendChild(line);const lab=document.createElement('div');lab.className='measure-label';lab.style.left=((m.a.x+m.b.x)/2)+'px';lab.style.top=((m.a.y+m.b.y)/2)+'px';lab.textContent=m.label;overlay.appendChild(lab)}
+function drawOverlay(){overlay.innerHTML='';measurements.forEach(addMeasure);points.forEach(addPoint);if(points.length===2)addMeasure({a:points[0],b:points[1],label:''})}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
-</body></html>
+</body>
+</html>
