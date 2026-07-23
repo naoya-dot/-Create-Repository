@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <title>図面寸法チェッカー</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}
+    header{background:#111827;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:3} h1{font-size:18px;margin:0}
+    .panel{padding:12px;background:#fff;border-bottom:1px solid #ddd}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    button,.filelabel,input{font-size:16px;border-radius:10px;border:1px solid #cbd5e1;padding:10px 12px;background:white}
+    button.primary,.filelabel{background:#2563eb;color:#fff;border-color:#2563eb}.filelabel input{display:none}
+    button.active{background:#16a34a;color:white;border-color:#16a34a}.small{font-size:13px;color:#475569;line-height:1.5}
+    #wrap{position:relative;height:62vh;min-height:420px;background:#d1d5db;overflow:hidden;touch-action:none}
+    canvas{position:absolute;left:0;top:0;background:#fff;transform-origin:0 0}
+    #status{font-weight:700;margin-top:8px}.result{font-size:28px;font-weight:800;color:#dc2626}
+    footer{padding:12px 16px;font-size:12px;color:#64748b}
+  </style>
+</head>
+<body>
+<header><h1>図面寸法チェッカー</h1></header>
+<section class="panel">
+  <label class="filelabel">① 図面を選ぶ<input id="file" type="file" accept="image/*"></label>
+  <div class="row">
+    <button id="calibrate">② 基準寸法を設定</button>
+    <button id="measure">③ 寸法を測る</button>
+    <button id="reset">やり直す</button>
+  </div>
+  <div id="status" class="small">まず、VectorworksからPNGまたはJPGで書き出した図面を選んでください。</div>
+  <div id="result" class="result"></div>
+</section>
+<div id="wrap"><canvas id="canvas"></canvas></div>
+<section class="panel small">
+  <b>使い方</b><br>
+  1. 図面を選ぶ<br>
+  2. 「基準寸法を設定」を押し、寸法が分かっている場所を2回タップ<br>
+  3. 実際の長さをmmで入力<br>
+  4. 「寸法を測る」を押し、測りたい場所を2回タップ<br><br>
+  2本指で拡大・縮小、1本指で図面を移動できます。
+</section>
+<footer>測定値は補助用です。施工前には必ず元図面・設計者・現地実測で確認してください。</footer>
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),wrap=document.getElementById('wrap');
+const file=document.getElementById('file'),statusEl=document.getElementById('status'),resultEl=document.getElementById('result');
+const btnCal=document.getElementById('calibrate'),btnMeasure=document.getElementById('measure'),btnReset=document.getElementById('reset');
+let img=null, mode='pan', points=[], mmPerPx=null, scale=1, ox=0, oy=0, dragging=false, last={x:0,y:0}, pinchStart=null;
+function setMode(m){mode=m;points=[];btnCal.classList.toggle('active',m==='cal');btnMeasure.classList.toggle('active',m==='measure');resultEl.textContent='';
+ statusEl.textContent=m==='cal'?'基準にする場所の始点と終点をタップしてください。':m==='measure'?(mmPerPx?'測りたい場所の始点と終点をタップしてください。':'先に基準寸法を設定してください。'):'図面を移動できます。';draw();}
+function fit(){if(!img)return; const s=Math.min(wrap.clientWidth/img.width,wrap.clientHeight/img.height);scale=s;ox=(wrap.clientWidth-img.width*s)/2;oy=(wrap.clientHeight-img.height*s)/2;draw();}
+function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);if(!img)return;ctx.setTransform(scale,0,0,scale,ox,oy);ctx.drawImage(img,0,0);ctx.lineWidth=3/scale;ctx.strokeStyle='#ef4444';ctx.fillStyle='#ef4444';
+ points.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,7/scale,0,Math.PI*2);ctx.fill()}); if(points.length===2){ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);ctx.lineTo(points[1].x,points[1].y);ctx.stroke();}}
+function screenToImage(x,y){return{x:(x-ox)/scale,y:(y-oy)/scale}}
+file.onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{img=im;canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;mmPerPx=null;points=[];fit();statusEl.textContent='図面を読み込みました。次に「基準寸法を設定」を押してください。'};im.src=URL.createObjectURL(f)};
+btnCal.onclick=()=>img?setMode('cal'):alert('先に図面を選んでください。');btnMeasure.onclick=()=>{if(!img)return alert('先に図面を選んでください。');if(!mmPerPx)return alert('先に基準寸法を設定してください。');setMode('measure')};btnReset.onclick=()=>{points=[];mmPerPx=null;resultEl.textContent='';fit();setMode('pan')};
+function choosePoint(clientX,clientY){if(mode!=='cal'&&mode!=='measure')return;const r=wrap.getBoundingClientRect(),p=screenToImage(clientX-r.left,clientY-r.top);points.push(p);if(points.length>2)points=[p];draw();if(points.length===2){const px=Math.hypot(points[1].x-points[0].x,points[1].y-points[0].y);if(mode==='cal'){const mm=parseFloat(prompt('この2点の実際の長さをmmで入力してください。例：3640'));if(mm>0){mmPerPx=mm/px;statusEl.textContent='基準寸法を設定しました。次に「寸法を測る」を押してください。';resultEl.textContent='設定完了';}else{points=[];draw();}}else{const mm=px*mmPerPx;resultEl.textContent=Math.round(mm).toLocaleString()+' mm';statusEl.textContent='もう一度測る場合は、次の始点をタップしてください。';}}}
+wrap.addEventListener('pointerdown',e=>{wrap.setPointerCapture(e.pointerId); if(mode==='cal'||mode==='measure'){choosePoint(e.clientX,e.clientY);return;}dragging=true;last={x:e.clientX,y:e.clientY}});
+wrap.addEventListener('pointermove',e=>{if(!dragging||mode!=='pan')return;ox+=e.clientX-last.x;oy+=e.clientY-last.y;last={x:e.clientX,y:e.clientY};draw()});
+wrap.addEventListener('pointerup',()=>dragging=false);
+wrap.addEventListener('wheel',e=>{e.preventDefault();if(!img)return;const r=wrap.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,before=screenToImage(mx,my),factor=e.deltaY<0?1.1:0.9;scale=Math.max(.1,Math.min(10,scale*factor));ox=mx-before.x*scale;oy=my-before.y*scale;draw()},{passive:false});
+let touches=[];wrap.addEventListener('touchstart',e=>{if(e.touches.length===2){const a=e.touches[0],b=e.touches[1];pinchStart={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),s:scale};}}, {passive:true});
+wrap.addEventListener('touchmove',e=>{if(e.touches.length===2&&pinchStart){const a=e.touches[0],b=e.touches[1],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);scale=Math.max(.1,Math.min(10,pinchStart.s*d/pinchStart.d));draw();}}, {passive:true});
+window.addEventListener('resize',()=>{canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;draw()});
+canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;
+</script>
+</body></html>
