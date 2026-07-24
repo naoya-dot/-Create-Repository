@@ -2,100 +2,378 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
+<title>DrawMark MVP</title>
 <link rel="manifest" href="manifest.webmanifest">
-<title>図面 寸法チェッカー</title>
 <style>
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;background:#f3f4f6}
-*{box-sizing:border-box}body{margin:0}.app{min-height:100vh;display:flex;flex-direction:column}
-header{background:#111827;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10}
-h1{font-size:18px;margin:0 0 4px}.sub{font-size:12px;opacity:.8}
-.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;background:#fff;border-bottom:1px solid #ddd}
-button,.file-label,input{font:inherit}button,.file-label{border:0;border-radius:10px;padding:11px 12px;background:#e5e7eb;text-align:center;font-weight:700}
-button.primary,.file-label.primary{background:#2563eb;color:#fff}button:disabled{opacity:.45}
-input[type=file]{display:none}.status{padding:9px 12px;background:#fff;font-size:13px;border-bottom:1px solid #ddd}
-.controls{display:flex;gap:8px;padding:8px 10px;background:#fff;align-items:center;overflow:auto;border-bottom:1px solid #ddd}
-.controls button{white-space:nowrap;padding:8px 10px}.page-info{white-space:nowrap;font-size:13px}
-.viewer-wrap{position:relative;flex:1;overflow:hidden;background:#6b7280;touch-action:none;min-height:45vh}
-.viewport{position:absolute;inset:0;overflow:hidden}
-.stage{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:0 8px 30px rgba(0,0,0,.3);--inv-scale:1}
-canvas{display:block;background:#fff}.overlay{position:absolute;inset:0;touch-action:none}
-.point-handle{position:absolute;width:28px;height:28px;transform:translate(-50%,-50%) scale(var(--inv-scale));touch-action:none;cursor:grab}
-.point-handle::before,.point-handle::after{content:"";position:absolute;background:#ef4444;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
-.point-handle::before{width:14px;height:1.5px}.point-handle::after{width:1.5px;height:14px}
-.point-dot{position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:#fff;border:1.5px solid #ef4444;transform:translate(-50%,-50%);pointer-events:none}
-.measure-line{position:absolute;height:calc(2px * var(--inv-scale));background:#ef4444;transform-origin:0 50%;pointer-events:none}
-.measure-label{position:absolute;transform:translate(-50%,-130%) scale(var(--inv-scale));background:#111827;color:#fff;padding:5px 8px;border-radius:7px;font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none}
-.precision-bar{display:none;gap:8px;padding:8px 10px;background:#fff;border-bottom:1px solid #ddd}.precision-bar.show{display:flex}.precision-bar button{flex:1}
-.loupe{position:fixed;width:128px;height:128px;border:3px solid #fff;border-radius:50%;box-shadow:0 3px 18px rgba(0,0,0,.45);background:#fff;display:none;z-index:50;pointer-events:none}.loupe.show{display:block}
-.dialog{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:60}.dialog.show{display:flex}
-.card{background:#fff;border-radius:14px;padding:18px;width:min(420px,100%)}.card h2{font-size:18px;margin:0 0 10px}.card p{font-size:14px;line-height:1.5}.card input{width:100%;padding:12px;border:1px solid #bbb;border-radius:9px;font-size:18px}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}
-.help{padding:12px 14px;background:#fffbeb;color:#78350f;font-size:13px;line-height:1.5}
+:root{
+  --bg:#0f172a;--panel:#111827;--line:#334155;--text:#f8fafc;--muted:#94a3b8;
+  --accent:#38bdf8;--danger:#ef4444;--ok:#22c55e;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select{font:inherit}
+#app{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+header{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
+header .title{font-weight:700;margin-right:auto}
+button,.file-btn{border:1px solid var(--line);background:#1e293b;color:var(--text);padding:9px 12px;border-radius:10px;cursor:pointer}
+button.active{background:var(--accent);color:#082f49;border-color:var(--accent)}
+button:disabled{opacity:.45}
+.file-btn input{display:none}
+#stageWrap{position:relative;overflow:hidden;background:#0b1020;touch-action:none}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#baseCanvas,#drawCanvas,#uiCanvas{position:absolute;left:0;top:0}
+#drawCanvas,#uiCanvas{touch-action:none}
+#uiCanvas{pointer-events:none}
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px;pointer-events:none}
+.toolbar{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line)}
+.toolbar::-webkit-scrollbar{display:none}
+.group{display:flex;gap:6px;align-items:center;padding-right:8px;border-right:1px solid var(--line)}
+.group:last-child{border-right:0}
+input[type=color]{width:42px;height:42px;border:0;background:none;padding:0}
+input[type=range]{width:110px}
+select{background:#1e293b;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px}
+.badge{font-size:12px;color:var(--muted);white-space:nowrap}
+#toast{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);background:#020617dd;color:white;padding:10px 14px;border-radius:999px;opacity:0;transition:.2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1}
+#textEditor{position:absolute;display:none;z-index:10}
+#textEditor input{min-width:180px;padding:8px;border-radius:8px;border:2px solid var(--accent);font-size:18px}
+@media(max-width:700px){
+  header .title{display:none}
+  button,.file-btn{padding:8px 10px}
+}
 </style>
 </head>
 <body>
-<div class="app">
-<header><h1>図面 寸法チェッカー</h1><div class="sub">PDF・JPEG・PNG・DXFに対応</div></header>
-<div class="toolbar">
-<label class="file-label primary">図面を選ぶ<input id="fileInput" type="file" accept="application/pdf,image/jpeg,image/png,.dxf,application/dxf,text/plain"></label>
-<button id="calibrateBtn" disabled>① 基準寸法を設定</button>
-<button id="measureBtn" disabled>② 寸法を測る</button>
-<button id="clearBtn" disabled>線を消す</button>
+<div id="app">
+  <header>
+    <div class="title">DrawMark MVP</div>
+    <label class="file-btn">図面を開く<input id="fileInput" type="file" accept=".pdf,.png,.jpg,.jpeg,.dxf,application/pdf,image/png,image/jpeg"></label>
+    <button id="fitBtn">全体表示</button>
+    <button id="undoBtn" disabled>↶</button>
+    <button id="redoBtn" disabled>↷</button>
+    <button id="exportBtn">PDF保存</button>
+  </header>
+
+  <main id="stageWrap">
+    <div id="empty">PDF・JPEG・PNG・DXFを読み込んでください<br>Apple Pencilで描画／指2本で移動・拡大縮小</div>
+    <div id="stage">
+      <canvas id="baseCanvas"></canvas>
+      <canvas id="drawCanvas"></canvas>
+      <canvas id="uiCanvas"></canvas>
+    </div>
+    <div id="textEditor"><input id="textInput" placeholder="文字を入力してEnter"></div>
+    <div id="toast"></div>
+  </main>
+
+  <footer class="toolbar">
+    <div class="group" id="tools">
+      <button data-tool="pen" class="active">ペン</button>
+      <button data-tool="highlighter">蛍光</button>
+      <button data-tool="eraser">消しゴム</button>
+      <button data-tool="line">直線</button>
+      <button data-tool="rect">四角</button>
+      <button data-tool="circle">円</button>
+      <button data-tool="arrow">矢印</button>
+      <button data-tool="text">文字</button>
+      <button data-tool="measure">寸法</button>
+    </div>
+    <div class="group">
+      <input id="color" type="color" value="#ef4444" aria-label="色">
+      <span class="badge">太さ</span>
+      <input id="width" type="range" min="1" max="24" value="4">
+    </div>
+    <div class="group">
+      <button id="clearBtn">書込み消去</button>
+    </div>
+  </footer>
 </div>
-<div id="status" class="status">最初にPDF・JPEG・PNG・DXFを選んでください。</div>
-<div class="controls">
-<button id="prevBtn" disabled>前のページ</button><span id="pageInfo" class="page-info">0 / 0</span><button id="nextBtn" disabled>次のページ</button>
-<button id="fitBtn" disabled>全体表示</button><span id="zoomInfo" class="page-info">100%</span>
-</div>
-<div id="precisionBar" class="precision-bar"><button id="cancelPoints">やり直す</button><button id="confirmPoints" class="primary">この2点で決定</button></div>
-<div class="help">二本指：拡大・縮小・移動。測定中：1本指で点を置き、十字をドラッグして細かく調整できます。DXFは線・ポリライン・円・円弧を表示します。</div>
-<div id="viewerWrap" class="viewer-wrap"><div class="viewport"><div id="stage" class="stage"><canvas id="pdfCanvas"></canvas><div id="overlay" class="overlay"></div></div></div></div>
-</div>
-<canvas id="loupe" class="loupe" width="256" height="256"></canvas>
-<div id="dialog" class="dialog"><div class="card"><h2>基準になる実寸を入力</h2><p>選んだ2点の本当の長さを、mmで入力してください。</p><input id="realLength" type="number" inputmode="decimal" placeholder="例：3640"><div class="actions"><button id="cancelDialog">やめる</button><button id="saveScale" class="primary">決定</button></div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
+<script src="https://cdn.jsdelivr.net/npm/dxf-parser@1.1.2/dist/dxf-parser.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+
 <script type="module">
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs';
-const $=id=>document.getElementById(id);
-const fileInput=$('fileInput'),canvas=$('pdfCanvas'),overlay=$('overlay'),stage=$('stage'),viewer=$('viewerWrap'),statusEl=$('status'),loupe=$('loupe');
-let pdfDoc=null,docType=null,pageNum=1,renderScale=1.6,viewScale=1,panX=0,panY=0,mode='idle',points=[],mmPerModelUnit=null,measurements=[];
-let modelUnitsPerCanvasPx=1,activePointers=new Map(),gestureStart=null,dragIndex=null,moved=false;
-function setStatus(t){statusEl.textContent=t}
-function enable(on){['calibrateBtn','measureBtn','clearBtn','fitBtn'].forEach(id=>$(id).disabled=!on);updatePageButtons()}
-function updatePageButtons(){const multi=docType==='pdf'&&pdfDoc; $('prevBtn').disabled=!multi||pageNum<=1;$('nextBtn').disabled=!multi||pageNum>=pdfDoc.numPages;$('pageInfo').textContent=multi?`${pageNum} / ${pdfDoc.numPages}`:'1 / 1'}
-function applyTransform(){stage.style.transform=`translate(${panX}px,${panY}px) scale(${viewScale})`;stage.style.setProperty('--inv-scale',1/viewScale);$('zoomInfo').textContent=Math.round(viewScale*100)+'%'}
-function fitStage(){if(!canvas.style.width)return;const vw=viewer.clientWidth,vh=viewer.clientHeight,cw=parseFloat(canvas.style.width),ch=parseFloat(canvas.style.height);viewScale=Math.min((vw-24)/cw,(vh-24)/ch,1);panX=(vw-cw*viewScale)/2;panY=(vh-ch*viewScale)/2;applyTransform()}
-function setupCanvas(cssW,cssH,dpr=window.devicePixelRatio||1){canvas.width=Math.max(1,Math.floor(cssW*dpr));canvas.height=Math.max(1,Math.floor(cssH*dpr));canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';stage.style.width=cssW+'px';stage.style.height=cssH+'px';overlay.style.width=cssW+'px';overlay.style.height=cssH+'px';return canvas.getContext('2d')}
-function resetDrawingState(){points=[];measurements=[];mmPerModelUnit=null;mode='idle';drawOverlay();$('precisionBar').classList.remove('show')}
-async function renderPdfPage(){const page=await pdfDoc.getPage(pageNum);const viewport=page.getViewport({scale:renderScale});const dpr=window.devicePixelRatio||1;const ctx=setupCanvas(viewport.width,viewport.height,dpr);await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;modelUnitsPerCanvasPx=1/renderScale;points=[];measurements=[];drawOverlay();updatePageButtons();requestAnimationFrame(fitStage)}
-async function loadImage(file){const url=URL.createObjectURL(file);try{const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});const maxSide=2200,scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));const dpr=window.devicePixelRatio||1,ctx=setupCanvas(w,h,dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(img,0,0,w,h);modelUnitsPerCanvasPx=1/scale;updatePageButtons();requestAnimationFrame(fitStage)}finally{URL.revokeObjectURL(url)}}
-function parseDxf(text){const lines=text.replace(/\r/g,'').split('\n');const pairs=[];for(let i=0;i+1<lines.length;i+=2){pairs.push([Number(lines[i].trim()),lines[i+1].trim()])}let inEntities=false,current=null,entities=[],poly=null;const push=()=>{if(current)entities.push(current);current=null};for(const [code,val] of pairs){if(code===0&&val==='SECTION'){continue}if(code===2&&val==='ENTITIES'){inEntities=true;continue}if(code===0&&val==='ENDSEC'&&inEntities){push();inEntities=false;break}if(!inEntities)continue;if(code===0){if(val==='VERTEX'&&poly){current={type:'VERTEX'};continue}if(val==='SEQEND'&&poly){if(current?.type==='VERTEX')poly.points.push({x:current.x||0,y:current.y||0});entities.push(poly);poly=null;current=null;continue}if(current?.type==='VERTEX'&&poly)poly.points.push({x:current.x||0,y:current.y||0});else push();if(val==='POLYLINE'){poly={type:'LWPOLYLINE',points:[],closed:false};current=null}else if(['LINE','LWPOLYLINE','CIRCLE','ARC'].includes(val))current={type:val,points:[]};else current=null;continue}if(!current&&!poly)continue;const target=current||poly;if(target.type==='LINE'){if(code===10)target.x1=+val;if(code===20)target.y1=+val;if(code===11)target.x2=+val;if(code===21)target.y2=+val}else if(target.type==='LWPOLYLINE'){if(code===10)target.points.push({x:+val,y:0});if(code===20&&target.points.length)target.points[target.points.length-1].y=+val;if(code===70)target.closed=(+val&1)===1}else if(target.type==='VERTEX'){if(code===10)target.x=+val;if(code===20)target.y=+val}else if(target.type==='CIRCLE'){if(code===10)target.x=+val;if(code===20)target.y=+val;if(code===40)target.r=+val}else if(target.type==='ARC'){if(code===10)target.x=+val;if(code===20)target.y=+val;if(code===40)target.r=+val;if(code===50)target.a1=+val;if(code===51)target.a2=+val}}
-if(current)push();return entities.filter(e=>{if(e.type==='LINE')return [e.x1,e.y1,e.x2,e.y2].every(Number.isFinite);if(e.type==='LWPOLYLINE')return e.points.length>1;if(e.type==='CIRCLE'||e.type==='ARC')return [e.x,e.y,e.r].every(Number.isFinite);return false})}
-function dxfBounds(es){let xs=[],ys=[];const pt=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y)){xs.push(x);ys.push(y)}};for(const e of es){if(e.type==='LINE'){pt(e.x1,e.y1);pt(e.x2,e.y2)}else if(e.type==='LWPOLYLINE')e.points.forEach(p=>pt(p.x,p.y));else if(e.type==='CIRCLE'||e.type==='ARC'){pt(e.x-e.r,e.y-e.r);pt(e.x+e.r,e.y+e.r)}}return xs.length?{minX:Math.min(...xs),maxX:Math.max(...xs),minY:Math.min(...ys),maxY:Math.max(...ys)}:null}
-function renderDxf(es){const b=dxfBounds(es);if(!b)throw new Error('対応図形がありません');const pad=40,target=1800,w0=Math.max(1,b.maxX-b.minX),h0=Math.max(1,b.maxY-b.minY),s=Math.min(target/w0,target/h0);const w=Math.ceil(w0*s+pad*2),h=Math.ceil(h0*s+pad*2),dpr=window.devicePixelRatio||1,ctx=setupCanvas(w,h,dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#111827';ctx.lineWidth=1;ctx.lineCap='round';ctx.lineJoin='round';const X=x=>(x-b.minX)*s+pad,Y=y=>(b.maxY-y)*s+pad;for(const e of es){ctx.beginPath();if(e.type==='LINE'){ctx.moveTo(X(e.x1),Y(e.y1));ctx.lineTo(X(e.x2),Y(e.y2))}else if(e.type==='LWPOLYLINE'){e.points.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));if(e.closed)ctx.closePath()}else if(e.type==='CIRCLE'){ctx.arc(X(e.x),Y(e.y),e.r*s,0,Math.PI*2)}else if(e.type==='ARC'){let a1=-(e.a1||0)*Math.PI/180,a2=-(e.a2||0)*Math.PI/180;ctx.arc(X(e.x),Y(e.y),e.r*s,a1,a2,true)}ctx.stroke()}modelUnitsPerCanvasPx=1/s;updatePageButtons();requestAnimationFrame(fitStage)}
-fileInput.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{setStatus('図面を読み込んでいます…');resetDrawingState();const name=f.name.toLowerCase();if(f.type==='application/pdf'||name.endsWith('.pdf')){docType='pdf';const data=new Uint8Array(await f.arrayBuffer());pdfDoc=await pdfjsLib.getDocument({data}).promise;pageNum=1;await renderPdfPage()}else if(f.type.startsWith('image/')||/\.(jpe?g|png)$/.test(name)){docType='image';pdfDoc=null;await loadImage(f)}else if(name.endsWith('.dxf')){docType='dxf';pdfDoc=null;const es=parseDxf(await f.text());if(!es.length)throw new Error('対応する2D図形が見つかりません');renderDxf(es)}else throw new Error('未対応形式');enable(true);setStatus(`${f.name} を開きました。拡大して基準寸法を設定してください。`)}catch(err){console.error(err);enable(false);setStatus('図面を開けませんでした。DXFはASCII形式の2D図面を使用してください。')}});
-function startMode(m){mode=m;points=[];drawOverlay();$('precisionBar').classList.remove('show');setStatus(m==='calibrate'?'基準にする場所の両端を1本指で押してください。':'測りたい場所の両端を1本指で押してください。')}
-$('calibrateBtn').onclick=()=>startMode('calibrate');$('measureBtn').onclick=()=>{if(!mmPerModelUnit){setStatus('先に基準寸法を設定してください。');return}startMode('measure')};$('clearBtn').onclick=()=>{points=[];measurements=[];drawOverlay();setStatus('表示した寸法線を消しました。')};
-$('prevBtn').onclick=async()=>{if(docType==='pdf'&&pageNum>1){pageNum--;resetDrawingState();await renderPdfPage()}};$('nextBtn').onclick=async()=>{if(docType==='pdf'&&pageNum<pdfDoc.numPages){pageNum++;resetDrawingState();await renderPdfPage()}};$('fitBtn').onclick=fitStage;
-function screenToStage(clientX,clientY){const r=viewer.getBoundingClientRect();return{x:(clientX-r.left-panX)/viewScale,y:(clientY-r.top-panY)/viewScale}}
-function clampPoint(p){return{x:Math.max(0,Math.min(parseFloat(canvas.style.width),p.x)),y:Math.max(0,Math.min(parseFloat(canvas.style.height),p.y))}}
-function pointerMid(){const a=[...activePointers.values()];return{x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}}
-function pointerDist(){const a=[...activePointers.values()];return Math.hypot(a[1].x-a[0].x,a[1].y-a[0].y)}
-viewer.addEventListener('pointerdown',e=>{viewer.setPointerCapture(e.pointerId);activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=false;if(activePointers.size===2){const mid=pointerMid();gestureStart={dist:pointerDist(),scale:viewScale,mid,contentX:(mid.x-viewer.getBoundingClientRect().left-panX)/viewScale,contentY:(mid.y-viewer.getBoundingClientRect().top-panY)/viewScale};return}if(activePointers.size===1&&mode!=='idle'){const target=e.target.closest('.point-handle');if(target){dragIndex=Number(target.dataset.index);showLoupe(e.clientX,e.clientY,points[dragIndex]);e.preventDefault()}}});
-viewer.addEventListener('pointermove',e=>{if(!activePointers.has(e.pointerId))return;const old=activePointers.get(e.pointerId);if(Math.hypot(e.clientX-old.x,e.clientY-old.y)>2)moved=true;activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(activePointers.size===2&&gestureStart){const mid=pointerMid(),newScale=Math.max(.25,Math.min(10,gestureStart.scale*(pointerDist()/gestureStart.dist))),r=viewer.getBoundingClientRect();viewScale=newScale;panX=mid.x-r.left-gestureStart.contentX*viewScale;panY=mid.y-r.top-gestureStart.contentY*viewScale;applyTransform();e.preventDefault();return}if(dragIndex!==null&&activePointers.size===1){points[dragIndex]=clampPoint(screenToStage(e.clientX,e.clientY));drawOverlay();showLoupe(e.clientX,e.clientY,points[dragIndex]);e.preventDefault()}});
-function finishPointer(e){if(activePointers.has(e.pointerId))activePointers.delete(e.pointerId);if(dragIndex!==null){dragIndex=null;hideLoupe();return}if(activePointers.size<2)gestureStart=null;if(mode!=='idle'&&!moved&&activePointers.size===0){const p=clampPoint(screenToStage(e.clientX,e.clientY));points.push(p);drawOverlay();if(points.length===2){$('precisionBar').classList.add('show');setStatus('十字をドラッグして位置を微調整し、「この2点で決定」を押してください。')}}}
-viewer.addEventListener('pointerup',finishPointer);viewer.addEventListener('pointercancel',finishPointer);
-$('cancelPoints').onclick=()=>{points=[];$('precisionBar').classList.remove('show');drawOverlay();setStatus('2点を選び直してください。')};$('confirmPoints').onclick=()=>{if(points.length!==2)return;$('precisionBar').classList.remove('show');if(mode==='calibrate')$('dialog').classList.add('show');else finishMeasure()};
-function pixelDistance(a,b){return Math.hypot(b.x-a.x,b.y-a.y)}
-function modelDistance(a,b){return pixelDistance(a,b)*modelUnitsPerCanvasPx}
-function finishMeasure(){const mm=modelDistance(points[0],points[1])*mmPerModelUnit;measurements.push({a:{...points[0]},b:{...points[1]},label:`${Math.round(mm).toLocaleString()} mm`});points=[];mode='idle';drawOverlay();setStatus(`測定結果：${Math.round(mm).toLocaleString()} mm`)}
-$('cancelDialog').onclick=()=>{$('dialog').classList.remove('show');points=[];mode='idle';drawOverlay()};$('saveScale').onclick=()=>{const real=parseFloat($('realLength').value);if(!(real>0)){alert('0より大きい数字を入力してください');return}mmPerModelUnit=real/modelDistance(points[0],points[1]);$('dialog').classList.remove('show');$('realLength').value='';points=[];mode='idle';drawOverlay();setStatus('基準寸法を設定しました。「寸法を測る」を押してください。')};
-function addPoint(p,index,editable=true){const h=document.createElement('div');h.className='point-handle';h.dataset.index=index;h.style.left=p.x+'px';h.style.top=p.y+'px';if(!editable)h.style.pointerEvents='none';h.innerHTML='<span class="point-dot"></span>';overlay.appendChild(h)}
-function addMeasure(m,editable=false){addPoint(m.a,0,editable);addPoint(m.b,1,editable);const dx=m.b.x-m.a.x,dy=m.b.y-m.a.y,len=Math.hypot(dx,dy),line=document.createElement('div');line.className='measure-line';line.style.left=m.a.x+'px';line.style.top=m.a.y+'px';line.style.width=len+'px';line.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;overlay.appendChild(line);if(m.label){const lab=document.createElement('div');lab.className='measure-label';lab.style.left=((m.a.x+m.b.x)/2)+'px';lab.style.top=((m.a.y+m.b.y)/2)+'px';lab.textContent=m.label;overlay.appendChild(lab)}}
-function drawOverlay(){overlay.innerHTML='';measurements.forEach(m=>addMeasure(m,false));if(points.length===1)addPoint(points[0],0,true);if(points.length===2)addMeasure({a:points[0],b:points[1],label:''},true)}
-function showLoupe(clientX,clientY,p){const ctx=loupe.getContext('2d'),cssW=parseFloat(canvas.style.width),cssH=parseFloat(canvas.style.height),sx=canvas.width/cssW,sy=canvas.height/cssH,crop=Math.max(10,32/viewScale);ctx.clearRect(0,0,loupe.width,loupe.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(canvas,(p.x-crop)*sx,(p.y-crop)*sy,crop*2*sx,crop*2*sy,0,0,loupe.width,loupe.height);ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(128,76);ctx.lineTo(128,180);ctx.moveTo(76,128);ctx.lineTo(180,128);ctx.stroke();loupe.style.left=Math.min(window.innerWidth-138,Math.max(10,clientX-64))+'px';loupe.style.top=Math.max(10,clientY-155)+'px';loupe.classList.add('show')}
-function hideLoupe(){loupe.classList.remove('show')}window.addEventListener('resize',()=>{if(docType&&mode==='idle')fitStage()});if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
+const $=s=>document.querySelector(s);
+const wrap=$("#stageWrap"), stage=$("#stage");
+const base=$("#baseCanvas"), draw=$("#drawCanvas"), ui=$("#uiCanvas");
+const bctx=base.getContext("2d"), dctx=draw.getContext("2d"), uctx=ui.getContext("2d");
+const fileInput=$("#fileInput"), empty=$("#empty"), toast=$("#toast");
+let docW=1200, docH=900, scale=1, tx=0, ty=0;
+let tool="pen", color="#ef4444", width=4;
+let drawing=false, start=null, last=null, currentPointer=null;
+let history=[], redoStack=[];
+let touchPoints=new Map(), gestureStart=null;
+let calibrated=false, calibration=null, measurePoints=[];
+let textPos=null;
+
+function showToast(msg){
+  toast.textContent=msg;toast.classList.add("show");
+  clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove("show"),1800);
+}
+function setSize(w,h){
+  docW=Math.max(1,Math.round(w));docH=Math.max(1,Math.round(h));
+  [base,draw,ui].forEach(c=>{c.width=docW;c.height=docH;c.style.width=docW+"px";c.style.height=docH+"px"});
+  stage.style.width=docW+"px";stage.style.height=docH+"px";
+}
+function applyTransform(){stage.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`}
+function fit(){
+  const r=wrap.getBoundingClientRect();
+  scale=Math.min(r.width/docW,r.height/docH)*0.96;
+  tx=(r.width-docW*scale)/2;ty=(r.height-docH*scale)/2;
+  applyTransform();
+}
+function screenToDoc(x,y){
+  const r=wrap.getBoundingClientRect();
+  return {x:(x-r.left-tx)/scale,y:(y-r.top-ty)/scale};
+}
+function saveHistory(){
+  history.push(draw.toDataURL("image/png"));
+  if(history.length>40)history.shift();
+  redoStack=[];updateUndo();
+}
+function restore(url){
+  dctx.clearRect(0,0,docW,docH);
+  if(!url)return;
+  const im=new Image();im.onload=()=>dctx.drawImage(im,0,0);im.src=url;
+}
+function updateUndo(){
+  $("#undoBtn").disabled=history.length<=1;
+  $("#redoBtn").disabled=redoStack.length===0;
+}
+function lineStyle(ctx,preview=false){
+  ctx.lineCap="round";ctx.lineJoin="round";
+  ctx.strokeStyle=color;ctx.fillStyle=color;
+  ctx.lineWidth=width/scale;
+  ctx.globalAlpha=tool==="highlighter"?0.28:1;
+  if(preview)ctx.globalAlpha*=0.85;
+}
+function clearUI(){uctx.clearRect(0,0,docW,docH)}
+function drawArrow(ctx,a,b){
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  const ang=Math.atan2(b.y-a.y,b.x-a.x),len=14/scale;
+  ctx.beginPath();
+  ctx.moveTo(b.x,b.y);
+  ctx.lineTo(b.x-len*Math.cos(ang-Math.PI/6),b.y-len*Math.sin(ang-Math.PI/6));
+  ctx.moveTo(b.x,b.y);
+  ctx.lineTo(b.x-len*Math.cos(ang+Math.PI/6),b.y-len*Math.sin(ang+Math.PI/6));
+  ctx.stroke();
+}
+function drawShape(ctx,a,b){
+  lineStyle(ctx,ctx===uctx);
+  if(tool==="line"){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+  if(tool==="rect"){ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)}
+  if(tool==="circle"){
+    const rx=Math.abs(b.x-a.x),ry=Math.abs(b.y-a.y);
+    ctx.beginPath();ctx.ellipse(a.x,a.y,rx,ry,0,0,Math.PI*2);ctx.stroke();
+  }
+  if(tool==="arrow")drawArrow(ctx,a,b);
+  ctx.globalAlpha=1;
+}
+function renderMeasure(){
+  clearUI();
+  if(measurePoints.length===0)return;
+  uctx.save();uctx.strokeStyle="#38bdf8";uctx.fillStyle="#38bdf8";uctx.lineWidth=2/scale;
+  for(const p of measurePoints){
+    const s=8/scale;uctx.beginPath();uctx.moveTo(p.x-s,p.y);uctx.lineTo(p.x+s,p.y);uctx.moveTo(p.x,p.y-s);uctx.lineTo(p.x,p.y+s);uctx.stroke();
+  }
+  if(measurePoints.length===2){
+    const [a,b]=measurePoints;uctx.beginPath();uctx.moveTo(a.x,a.y);uctx.lineTo(b.x,b.y);uctx.stroke();
+    const px=Math.hypot(b.x-a.x,b.y-a.y);
+    let label=px.toFixed(1)+" px";
+    if(calibrated)label=(px*calibration.mmPerPx).toFixed(0)+" mm";
+    uctx.font=`${16/scale}px sans-serif`;uctx.textAlign="center";uctx.textBaseline="bottom";
+    uctx.fillText(label,(a.x+b.x)/2,(a.y+b.y)/2-6/scale);
+  }
+  uctx.restore();
+}
+function commitMeasure(){
+  if(measurePoints.length!==2)return;
+  const [a,b]=measurePoints;
+  if(!calibrated){
+    const val=prompt("この2点間の実寸をmmで入力してください","1000");
+    const mm=parseFloat(val);
+    if(mm>0){
+      const px=Math.hypot(b.x-a.x,b.y-a.y);
+      calibration={mmPerPx:mm/px};calibrated=true;
+      showToast("基準寸法を設定しました");
+    }
+  }else{
+    dctx.save();lineStyle(dctx);
+    drawArrow(dctx,a,b);drawArrow(dctx,b,a);
+    const px=Math.hypot(b.x-a.x,b.y-a.y),mm=px*calibration.mmPerPx;
+    dctx.font=`${18/scale}px sans-serif`;dctx.textAlign="center";dctx.textBaseline="bottom";
+    dctx.fillText(mm.toFixed(0)+" mm",(a.x+b.x)/2,(a.y+b.y)/2-8/scale);
+    dctx.restore();saveHistory();
+  }
+  measurePoints=[];clearUI();
+}
+
+async function loadFile(file){
+  const ext=file.name.split(".").pop().toLowerCase();
+  empty.style.display="none";calibrated=false;calibration=null;measurePoints=[];
+  if(ext==="pdf"){
+    const data=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data}).promise;
+    const page=await pdf.getPage(1);
+    const vp0=page.getViewport({scale:1});
+    const target=1800/Math.max(vp0.width,vp0.height);
+    const vp=page.getViewport({scale:target});
+    setSize(vp.width,vp.height);
+    await page.render({canvasContext:bctx,viewport:vp}).promise;
+    showToast(`PDF 1ページ目を読込（全${pdf.numPages}ページ）`);
+  }else if(ext==="png"||ext==="jpg"||ext==="jpeg"){
+    const url=URL.createObjectURL(file);
+    const im=new Image();
+    await new Promise((res,rej)=>{im.onload=res;im.onerror=rej;im.src=url});
+    setSize(im.naturalWidth,im.naturalHeight);bctx.drawImage(im,0,0);URL.revokeObjectURL(url);
+  }else if(ext==="dxf"){
+    const text=await file.text();
+    renderDXF(text);
+  }else{showToast("未対応形式です");return}
+  dctx.clearRect(0,0,docW,docH);history=[draw.toDataURL("image/png")];redoStack=[];updateUndo();fit();
+}
+
+function renderDXF(text){
+  const parser=new window.DxfParser();
+  let dxf;
+  try{dxf=parser.parseSync(text)}catch(e){alert("DXFの解析に失敗しました");return}
+  const ents=dxf.entities||[];
+  let xs=[],ys=[];
+  const add=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y)){xs.push(x);ys.push(y)}};
+  for(const e of ents){
+    if(e.vertices)for(const v of e.vertices)add(v.x,v.y);
+    if(e.start)add(e.start.x,e.start.y);if(e.end)add(e.end.x,e.end.y);
+    if(e.center){add(e.center.x-e.radius,e.center.y-e.radius);add(e.center.x+e.radius,e.center.y+e.radius)}
+  }
+  if(!xs.length){alert("表示できる2D図形がありません");return}
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  const pad=60,w=1600,h=Math.max(900,1600*(maxY-minY||1)/(maxX-minX||1));
+  setSize(w,h);bctx.fillStyle="white";bctx.fillRect(0,0,w,h);bctx.strokeStyle="#111";bctx.lineWidth=1;
+  const sx=(w-pad*2)/(maxX-minX||1),sy=(h-pad*2)/(maxY-minY||1),s=Math.min(sx,sy);
+  const p=(x,y)=>({x:pad+(x-minX)*s,y:h-pad-(y-minY)*s});
+  for(const e of ents){
+    bctx.beginPath();
+    if(e.type==="LINE"&&e.vertices?.length>=2){const a=p(e.vertices[0].x,e.vertices[0].y),b=p(e.vertices[1].x,e.vertices[1].y);bctx.moveTo(a.x,a.y);bctx.lineTo(b.x,b.y);bctx.stroke()}
+    else if((e.type==="LWPOLYLINE"||e.type==="POLYLINE")&&e.vertices?.length){const a=p(e.vertices[0].x,e.vertices[0].y);bctx.moveTo(a.x,a.y);for(const v of e.vertices.slice(1)){const q=p(v.x,v.y);bctx.lineTo(q.x,q.y)}if(e.shape)bctx.closePath();bctx.stroke()}
+    else if(e.type==="CIRCLE"){const c=p(e.center.x,e.center.y);bctx.arc(c.x,c.y,e.radius*s,0,Math.PI*2);bctx.stroke()}
+    else if(e.type==="ARC"){const c=p(e.center.x,e.center.y);bctx.arc(c.x,c.y,e.radius*s,-e.endAngle,-e.startAngle);bctx.stroke()}
+  }
+  showToast("DXFを読み込みました");
+}
+
+fileInput.addEventListener("change",e=>{const f=e.target.files[0];if(f)loadFile(f)});
+$("#fitBtn").addEventListener("click",fit);
+$("#tools").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-tool]");if(!b)return;
+  tool=b.dataset.tool;document.querySelectorAll("[data-tool]").forEach(x=>x.classList.toggle("active",x===b));
+  measurePoints=[];clearUI();
+});
+$("#color").addEventListener("input",e=>color=e.target.value);
+$("#width").addEventListener("input",e=>width=+e.target.value);
+$("#clearBtn").addEventListener("click",()=>{if(confirm("書き込みをすべて消去しますか？")){dctx.clearRect(0,0,docW,docH);saveHistory()}});
+$("#undoBtn").addEventListener("click",()=>{
+  if(history.length<=1)return;
+  redoStack.push(history.pop());restore(history.at(-1));updateUndo();
+});
+$("#redoBtn").addEventListener("click",()=>{
+  if(!redoStack.length)return;
+  const x=redoStack.pop();history.push(x);restore(x);updateUndo();
+});
+$("#exportBtn").addEventListener("click",()=>{
+  const out=document.createElement("canvas");out.width=docW;out.height=docH;
+  const c=out.getContext("2d");c.drawImage(base,0,0);c.drawImage(draw,0,0);
+  const img=out.toDataURL("image/jpeg",0.95);
+  const {jsPDF}=window.jspdf;
+  const orient=docW>=docH?"landscape":"portrait";
+  const pdf=new jsPDF({orientation:orient,unit:"px",format:[docW,docH]});
+  pdf.addImage(img,"JPEG",0,0,docW,docH);
+  pdf.save("DrawMark_書込み図面.pdf");
+});
+
+function pointerDown(e){
+  if(e.pointerType==="touch"){
+    touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchPoints.size===2){
+      const pts=[...touchPoints.values()];
+      const mid={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
+      const dist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+      gestureStart={mid,dist,scale,tx,ty};
+      drawing=false;clearUI();return;
+    }
+    if(e.pointerType==="touch" && tool!=="text" && tool!=="measure") return;
+  }
+  if(touchPoints.size>=2)return;
+  const p=screenToDoc(e.clientX,e.clientY);
+  currentPointer=e.pointerId;
+  if(tool==="text"){
+    textPos=p;
+    const r=wrap.getBoundingClientRect();
+    const ed=$("#textEditor");ed.style.display="block";ed.style.left=(e.clientX-r.left)+"px";ed.style.top=(e.clientY-r.top)+"px";
+    $("#textInput").value="";$("#textInput").focus();return;
+  }
+  if(tool==="measure"){
+    measurePoints.push(p);if(measurePoints.length>2)measurePoints=[p];
+    renderMeasure();if(measurePoints.length===2)setTimeout(commitMeasure,80);return;
+  }
+  drawing=true;start=last=p;draw.setPointerCapture(e.pointerId);
+  if(tool==="pen"||tool==="highlighter"||tool==="eraser")saveHistory();
+}
+function pointerMove(e){
+  if(e.pointerType==="touch"&&touchPoints.has(e.pointerId)){
+    touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchPoints.size===2&&gestureStart){
+      const pts=[...touchPoints.values()];
+      const mid={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
+      const dist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+      const newScale=Math.min(12,Math.max(.08,gestureStart.scale*dist/gestureStart.dist));
+      const docX=(gestureStart.mid.x-wrap.getBoundingClientRect().left-gestureStart.tx)/gestureStart.scale;
+      const docY=(gestureStart.mid.y-wrap.getBoundingClientRect().top-gestureStart.ty)/gestureStart.scale;
+      scale=newScale;
+      tx=mid.x-wrap.getBoundingClientRect().left-docX*scale;
+      ty=mid.y-wrap.getBoundingClientRect().top-docY*scale;
+      applyTransform();return;
+    }
+  }
+  if(!drawing||e.pointerId!==currentPointer)return;
+  const p=screenToDoc(e.clientX,e.clientY);
+  if(tool==="pen"||tool==="highlighter"){
+    dctx.save();lineStyle(dctx);dctx.beginPath();dctx.moveTo(last.x,last.y);dctx.lineTo(p.x,p.y);dctx.stroke();dctx.restore();last=p;
+  }else if(tool==="eraser"){
+    dctx.save();dctx.globalCompositeOperation="destination-out";dctx.lineCap="round";dctx.lineWidth=(width*4)/scale;dctx.beginPath();dctx.moveTo(last.x,last.y);dctx.lineTo(p.x,p.y);dctx.stroke();dctx.restore();last=p;
+  }else{clearUI();drawShape(uctx,start,p)}
+}
+function pointerUp(e){
+  if(e.pointerType==="touch"){
+    touchPoints.delete(e.pointerId);
+    if(touchPoints.size<2)gestureStart=null;
+  }
+  if(!drawing||e.pointerId!==currentPointer)return;
+  const p=screenToDoc(e.clientX,e.clientY);
+  if(["line","rect","circle","arrow"].includes(tool)){clearUI();drawShape(dctx,start,p);saveHistory()}
+  else if(["pen","highlighter","eraser"].includes(tool)){history[history.length-1]=draw.toDataURL("image/png");updateUndo()}
+  drawing=false;currentPointer=null;
+}
+draw.addEventListener("pointerdown",pointerDown);
+draw.addEventListener("pointermove",pointerMove);
+draw.addEventListener("pointerup",pointerUp);
+draw.addEventListener("pointercancel",pointerUp);
+
+$("#textInput").addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;
+  const val=e.target.value.trim();
+  if(val&&textPos){
+    dctx.save();dctx.fillStyle=color;dctx.font=`${Math.max(14,width*4)/scale}px sans-serif`;dctx.fillText(val,textPos.x,textPos.y);dctx.restore();saveHistory();
+  }
+  $("#textEditor").style.display="none";textPos=null;
+});
+window.addEventListener("resize",()=>{if(base.width)fit()});
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+setSize(docW,docH);fit();history=[draw.toDataURL("image/png")];updateUndo();
 </script>
 </body>
 </html>
